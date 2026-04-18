@@ -1,0 +1,16 @@
+name: build_runner_hook
+description: An analyzer plugin for automatically running build_runner
+version: 1.0.0
+repository: https://github.com/maranix/build_runner_hook
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  analysis_server_plugin: ^0.3.14
+  analyzer: ^12.1.0
+  async: ^2.13.1
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
