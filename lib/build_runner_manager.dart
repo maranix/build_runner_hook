@@ -26,7 +26,7 @@ final class BuildRunnerManager {
     if (_running) return;
 
     _running = true;
-    _log("Starting up Build Runner in $rootDir");
+    log("Starting up Build Runner in $rootDir");
 
     try {
       _process = await Process.start("dart", [
@@ -36,7 +36,7 @@ final class BuildRunnerManager {
         ...args,
       ], workingDirectory: rootDir);
 
-      _log("Attching stdout & stderr to Log File");
+      log("Attching stdout & stderr to Log File");
 
       _stdGroup
         ..add(_process!.stdout)
@@ -44,22 +44,25 @@ final class BuildRunnerManager {
 
       _stdGroupSubscription = _stdGroup.stream
           .transform(Utf8Decoder())
-          .listen(_log);
-      _log("Build Runner is running!");
+          .listen(log);
     } catch (e) {
-      _log("Error running Build Runner: $e");
+      log("Error running Build Runner: $e");
       _running = false;
     }
   }
 
   void stop() {
+    log("Killing Build Runner process");
+
     _stdGroupSubscription?.cancel();
     _stdGroup.close();
     _process?.kill();
     _sink.close();
+
+    log("Build Runner killed");
   }
 
-  void _log(String message) {
+  void log(String message) {
     final timestamp = DateTime.now();
     _sink.writeln("Timestamp $timestamp\t$message");
   }

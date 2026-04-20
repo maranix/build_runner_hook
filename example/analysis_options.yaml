@@ -1,0 +1,7 @@
+include: package:lints/recommended.yaml
+
+plugins:
+  build_runner_hook:
+    path: ../
+    diagnostics:
+      auto_run: true
