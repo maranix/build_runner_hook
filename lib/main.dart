@@ -5,9 +5,15 @@ import 'package:analysis_server_plugin/registry.dart';
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
+import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/error/error.dart';
+
+// ignore: implementation_imports
+import 'package:analyzer/src/analysis_options/analysis_options_provider.dart';
+// ignore: implementation_imports
+import 'package:analyzer/src/dart/analysis/driver_based_analysis_context.dart';
 
 import 'package:build_runner_hook/build_runner_manager.dart';
 
@@ -70,6 +76,29 @@ final class _Visitor extends SimpleAstVisitor<void> {
 
     final packageRootPath = context.package?.root.path ?? "";
 
-    _runnerHook.start(packageRootPath);
+    try {
+      final collection = AnalysisContextCollection(
+        includedPaths: [packageRootPath],
+      );
+      final analysisOptionsContext =
+          collection.contextFor(packageRootPath) as DriverBasedAnalysisContext;
+
+      final sourceProvider = analysisOptionsContext.driver.sourceFactory;
+      final resourceProvider = analysisOptionsContext.driver.resourceProvider;
+
+      final provider = AnalysisOptionsProvider(sourceProvider);
+
+      final path = "$packageRootPath/analysis_options.yaml";
+      final yamlMap = provider.getOptionsFromFile(
+        resourceProvider.getFile(path),
+      );
+
+      _runnerHook.log(path);
+      _runnerHook.log(yamlMap.toString());
+
+      _runnerHook.start(packageRootPath);
+    } catch (e) {
+      _runnerHook.log(e.toString());
+    }
   }
 }
