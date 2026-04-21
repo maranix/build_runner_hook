@@ -1,39 +1,107 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# build_runner_hook
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+[![Pub Version](https://img.shields.io/pub/v/build_runner_hook)](https://pub.dev/packages/build_runner_hook)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/tools/pub/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+An [analyzer plugin](https://dart.dev/tools/analysis) that automatically runs [`build_runner watch`](https://pub.dev/packages/build_runner) in the background when your IDE opens a Dart or Flutter project — no manual terminal commands needed.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- **Zero-friction code generation** — `build_runner watch` starts automatically when the analyzer detects a `part` directive, keeping generated files in sync as you code.
+- **Runs in the background** — No terminal windows to manage. The plugin spawns and manages the `build_runner` process for you.
+- **Graceful lifecycle** — The process is cleanly stopped when the analyzer shuts down.
+- **Structured logging** — All `build_runner` stdout/stderr output is written to a timestamped log file for easy debugging.
 
-## Getting started
+## Getting Started
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+### Prerequisites
 
-## Usage
+- Dart SDK `^3.11.0`
+- A project that uses [`build_runner`](https://pub.dev/packages/build_runner) for code generation (e.g., `json_serializable`, `freezed`, `dart_mappable`, etc.)
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+### Installation
 
-```dart
-const like = 'sample';
+Enable the plugin in your project's `analysis_options.yaml`:
+
+```yaml
+# analysis_options.yaml
+
+plugins:
+  build_runner_hook:
 ```
 
-## Additional information
+That's it. The next time your IDE restarts the analysis server, `build_runner watch` will start automatically when the plugin encounters a `part` directive in your source files.
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+## Configuration
+
+The plugin currently works out of the box with sensible defaults. `build_runner watch` is started with the following flags:
+
+| Flag                           | Description                                                   |
+| ------------------------------ | ------------------------------------------------------------- |
+| `--delete-conflicting-outputs` | Automatically deletes outputs from previous conflicting builds |
+| `--low-resources-mode`         | Reduces memory and CPU usage at the cost of build speed        |
+
+## Logs & Troubleshooting
+
+The plugin writes all `build_runner` output (stdout and stderr) to a log file. This is the first place to check if code generation isn't working as expected.
+
+### Log file location
+
+The log file is written to your system's temporary directory:
+
+| OS      | Path                                           |
+| ------- | ---------------------------------------------- |
+| macOS   | `$TMPDIR/build_runner_hook.log`                  |
+| Linux   | `$TMPDIR/build_runner_hook.log`                  |
+| Windows | `%TEMP%\build_runner_hook.log`                  |
+
+### Viewing logs
+
+**Tail logs in real-time (macOS / Linux):**
+
+```bash
+tail -f $TMPDIR/build_runner_hook.log
+```
+
+**View the full log:**
+
+```bash
+cat $TMPDIR/build_runner_hook.log
+```
+
+> [!NOTE]
+> You can also restart the analysis server via `Dart: Restart Analysis Server` to re-trigger the plugin.
+
+### Common issues
+
+| Symptom                             | Likely cause                                   | Fix                                                                                        |
+| ----------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Generated files not updating        | `build_runner` is not in `dev_dependencies`     | Run `dart pub add --dev build_runner`                                                      |
+| Plugin not activating               | Missing `plugins` block in `analysis_options.yaml` | Add the [setup configuration](#setup) shown above                                          |
+| `build_runner` crashes on start     | Dependency version conflict                    | Check the log file for details, then run `dart pub upgrade`                                 |
+| Stale log file from previous session | Old process was not cleaned up                 | Delete the log file and restart the analysis server                                        |
+
+## Example
+
+A working example project is available in the [`example/`](https://github.com/maranix/build_runner_hook/tree/main/example) directory. It demonstrates the plugin with [`dart_mappable`](https://pub.dev/packages/dart_mappable) for code generation.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a [Pull Request](https://github.com/maranix/build_runner_hook/pulls).
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'Add my feature'`)
+4. Push to the branch (`git push origin feature/my-feature`)
+5. Open a Pull Request
+
+Please ensure your code follows the project's analysis rules and that all tests pass:
+
+```bash
+dart analyze
+dart test
+```
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
