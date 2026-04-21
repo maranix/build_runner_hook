@@ -22,7 +22,7 @@ final class BuildRunnerManager {
   bool _running = false;
   bool get running => _running;
 
-  void start(String rootDir, {List<String> args = const []}) async {
+  void start(String rootDir) async {
     if (_running) return;
 
     _running = true;
@@ -33,7 +33,8 @@ final class BuildRunnerManager {
         "run",
         "build_runner",
         "watch",
-        ...args,
+        "--delete-conflicting-outputs",
+        "--low-resources-mode",
       ], workingDirectory: rootDir);
 
       log("Attching stdout & stderr to Log File");
