@@ -27,19 +27,10 @@ Enable the plugin in your project's `analysis_options.yaml`:
 # analysis_options.yaml
 
 plugins:
-  build_runner_hook:
+  build_runner_hook: ^1.1.0
 ```
 
 That's it. The next time your IDE restarts the analysis server, `build_runner watch` will start automatically when the plugin encounters a `part` directive in your source files.
-
-## Configuration
-
-The plugin currently works out of the box with sensible defaults. `build_runner watch` is started with the following flags:
-
-| Flag                           | Description                                                   |
-| ------------------------------ | ------------------------------------------------------------- |
-| `--delete-conflicting-outputs` | Automatically deletes outputs from previous conflicting builds |
-| `--low-resources-mode`         | Reduces memory and CPU usage at the cost of build speed        |
 
 ## Logs & Troubleshooting
 
