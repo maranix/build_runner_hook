@@ -33,8 +33,6 @@ final class BuildRunnerManager {
         "run",
         "build_runner",
         "watch",
-        "--delete-conflicting-outputs",
-        "--low-resources-mode",
       ], workingDirectory: rootDir);
 
       log("Attching stdout & stderr to Log File");
