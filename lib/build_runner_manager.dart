@@ -2,18 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:analyzer/dart/analysis/context_root.dart';
 import 'package:async/async.dart';
 
-final _defaultPath = "${Directory.systemTemp.path}/build_runner_hook.log";
+final _logUri = Directory.systemTemp.uri;
+final _pluginLogUri = _logUri.resolve("./brh.log");
 
 final class BuildRunnerManager {
-  BuildRunnerManager({String? logFilePath})
-    : _logFile = File(logFilePath ?? _defaultPath) {
-    _sink = _logFile.openWrite(mode: .writeOnly);
-  }
+  BuildRunnerManager()
+    : _pluginSink = File(
+        _pluginLogUri.toFilePath(),
+      ).openWrite(mode: .writeOnly);
 
-  final File _logFile;
-  late final IOSink _sink;
+  final IOSink _pluginSink;
+
+  IOSink? _buildRunnerSink;
   Process? _process;
 
   final _stdGroup = StreamGroup<List<int>>();
@@ -22,20 +25,33 @@ final class BuildRunnerManager {
   bool _running = false;
   bool get running => _running;
 
-  void start(String rootDir) async {
+  void start(String path) async {
     if (_running) return;
 
     _running = true;
-    log("Starting up Build Runner in $rootDir");
+
+    final pkg = getPkgNameFromPath(path);
+
+    logPlugin("Creating log for $pkg package");
+
+    _buildRunnerSink = File(
+      _logUri.resolve("./brh_$pkg.log").toFilePath(),
+    ).openWrite(mode: .writeOnly);
 
     try {
-      _process = await Process.start("dart", [
+      final isWorkspace = await _isDartWorkspace(path);
+      final args = [
         "run",
         "build_runner",
         "watch",
-      ], workingDirectory: rootDir);
+        if (isWorkspace) "--workspace",
+      ];
 
-      log("Attching stdout & stderr to Log File");
+      logPlugin("Starting Build Runner in $path using ${args.skip(1)}");
+
+      _process = await Process.start("dart", args, workingDirectory: path);
+
+      logPlugin("Attching stdout & stderr to Log File");
 
       _stdGroup
         ..add(_process!.stdout)
@@ -43,26 +59,88 @@ final class BuildRunnerManager {
 
       _stdGroupSubscription = _stdGroup.stream
           .transform(Utf8Decoder())
-          .listen(log);
+          .listen(logBuildRunner);
+
+      logPlugin("Build Runner running in $path");
     } catch (e) {
-      log("Error running Build Runner: $e");
+      logPlugin("Error running Build Runner: $e");
       _running = false;
     }
   }
 
-  void stop() {
-    log("Killing Build Runner process");
+  Future<void> stop() async {
+    logPlugin("Stopping Build Runner");
 
-    _stdGroupSubscription?.cancel();
-    _stdGroup.close();
+    await _stdGroupSubscription?.cancel();
+    await _stdGroup.close();
+
+    await _buildRunnerSink?.close();
     _process?.kill();
-    _sink.close();
 
-    log("Build Runner killed");
+    logPlugin("Build Runner stopped");
+    await _pluginSink.close();
   }
 
-  void log(String message) {
+  void logPlugin(String message) {
     final timestamp = DateTime.now();
-    _sink.writeln("Timestamp $timestamp\t$message");
+    _pluginSink.writeln("Timestamp $timestamp\t$message");
+  }
+
+  void logBuildRunner(String message) {
+    final timestamp = DateTime.now();
+    _buildRunnerSink?.writeln("Timestamp $timestamp\t$message");
+  }
+
+  String getPkgNameFromPath(String path) {
+    var start = path.length - 1;
+
+    while (start >= 0) {
+      if (path[start] == Platform.pathSeparator) {
+        break;
+      }
+
+      start--;
+    }
+
+    return path.substring(start + 1, path.length);
+  }
+
+  bool hasBuildRunner(ContextRoot ctx) {
+    for (final pkg in ctx.workspace.packages.packages) {
+      if (pkg.name == "build_runner") return true;
+    }
+
+    return false;
+  }
+
+  Future<bool> _isDartWorkspace(String path) async {
+    try {
+      final process = await Process.start("dart", [
+        "pub",
+        "workspace",
+        "list",
+      ], workingDirectory: path);
+
+      final pkgCount = await process.stdout
+          .transform(Utf8Decoder())
+          .transform(LineSplitter())
+          .skip(1)
+          .fold(0, (prev, next) {
+            if (next.isEmpty) return prev;
+
+            return prev + 1;
+          });
+
+      process.kill();
+      return pkgCount > 1;
+    } catch (e) {
+      logPlugin(
+        "Unable to determine whether $path is in a Dart Workspace"
+        "\n"
+        "${e.toString()}",
+      );
+
+      return false;
+    }
   }
 }
