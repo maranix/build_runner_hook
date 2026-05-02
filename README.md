@@ -3,14 +3,16 @@
 [![Pub Version](https://img.shields.io/pub/v/build_runner_hook)](https://pub.dev/packages/build_runner_hook)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-An [analyzer plugin](https://dart.dev/tools/analysis) that automatically runs [`build_runner watch`](https://pub.dev/packages/build_runner) in the background when your IDE opens a Dart or Flutter project — no manual terminal commands needed.
+An [analyzer plugin](https://dart.dev/tools/analysis) that automatically runs [`build_runner watch`](https://pub.dev/packages/build_runner) in the background when your IDE opens a Dart or Flutter project. It also detects Dart workspaces and starts `build_runner` in workspace mode when needed.
 
 ## Features
 
 - **Zero-friction code generation** — `build_runner watch` starts automatically when the analyzer detects a `part` directive, keeping generated files in sync as you code.
+- **Workspace-aware startup** — In Dart workspaces, the plugin starts `build_runner watch --workspace` from the workspace root.
+- **Dependency guard** — Startup is skipped when `build_runner` is not available in the current package or workspace, and the reason is logged.
 - **Runs in the background** — No terminal windows to manage. The plugin spawns and manages the `build_runner` process for you.
 - **Graceful lifecycle** — The process is cleanly stopped when the analyzer shuts down.
-- **Structured logging** — All `build_runner` stdout/stderr output is written to a timestamped log file for easy debugging.
+- **Structured logging** — Plugin lifecycle events and `build_runner` output are written to separate timestamped log files for easier debugging.
 
 ## Getting Started
 
@@ -27,37 +29,50 @@ Enable the plugin in your project's `analysis_options.yaml`:
 # analysis_options.yaml
 
 plugins:
-  build_runner_hook: ^1.1.0
+  build_runner_hook: ^1.2.0
 ```
 
-That's it. The next time your IDE restarts the analysis server, `build_runner watch` will start automatically when the plugin encounters a `part` directive in your source files.
+That's it. The next time your IDE restarts the analysis server, the plugin will start automatically when it encounters a `part` directive in your source files.
+
+### How startup works
+
+- Regular package: runs `dart run build_runner watch`
+- Dart workspace: runs `dart run build_runner watch --workspace`
+
+If `build_runner` is not present in the active analysis context, startup is skipped.
 
 ## Logs & Troubleshooting
 
-The plugin writes all `build_runner` output (stdout and stderr) to a log file. This is the first place to check if code generation isn't working as expected.
+The plugin writes plugin lifecycle events and `build_runner` process output to separate log files. These are the first places to check if code generation is not working as expected.
 
 ### Log file location
 
-The log file is written to your system's temporary directory:
+The log files are written to your system's temporary directory:
 
 | OS      | Path                                           |
 | ------- | ---------------------------------------------- |
-| macOS   | `$TMPDIR/build_runner_hook.log`                  |
-| Linux   | `$TMPDIR/build_runner_hook.log`                  |
-| Windows | `%TEMP%\build_runner_hook.log`                  |
+| macOS   | `$TMPDIR/brh.log` and `$TMPDIR/brh_<package>.log` |
+| Linux   | `$TMPDIR/brh.log` and `$TMPDIR/brh_<package>.log` |
+| Windows | `%TEMP%\brh.log` and `%TEMP%\brh_<package>.log` |
 
 ### Viewing logs
 
-**Tail logs in real-time (macOS / Linux):**
+**Tail the plugin log (macOS / Linux):**
 
 ```bash
-tail -f $TMPDIR/build_runner_hook.log
+tail -f $TMPDIR/brh.log
 ```
 
-**View the full log:**
+**Tail a package `build_runner` log:**
 
 ```bash
-cat $TMPDIR/build_runner_hook.log
+tail -f $TMPDIR/brh_<package>.log
+```
+
+**View the full plugin log:**
+
+```bash
+cat $TMPDIR/brh.log
 ```
 
 > [!NOTE]
@@ -65,12 +80,13 @@ cat $TMPDIR/build_runner_hook.log
 
 ### Common issues
 
-| Symptom                             | Likely cause                                   | Fix                                                                                        |
-| ----------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Generated files not updating        | `build_runner` is not in `dev_dependencies`     | Run `dart pub add --dev build_runner`                                                      |
-| Plugin not activating               | Missing `plugins` block in `analysis_options.yaml` | Add the [setup configuration](#setup) shown above                                          |
-| `build_runner` crashes on start     | Dependency version conflict                    | Check the log file for details, then run `dart pub upgrade`                                 |
-| Stale log file from previous session | Old process was not cleaned up                 | Delete the log file and restart the analysis server                                        |
+| Symptom                         | Likely cause                                      | Fix                                                                                           |
+| -------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Generated files not updating     | `build_runner` is not in `dev_dependencies`       | Run `dart pub add --dev build_runner`                                                         |
+| Plugin not activating            | Missing `plugins` block in `analysis_options.yaml` | Add the installation configuration shown above                                                |
+| Plugin starts but skips startup  | Active package or workspace does not expose `build_runner` | Check `brh.log`, then add `build_runner` where the plugin is analyzing from                   |
+| `build_runner` crashes on start  | Dependency version conflict                       | Check `brh_<package>.log` for details, then run `dart pub upgrade`                            |
+| Workspace not detected correctly | `dart pub workspace list` cannot be resolved      | Verify your Dart SDK setup, then restart the analysis server and inspect `brh.log`            |
 
 ## Example
 
