@@ -16,8 +16,8 @@ environment:
   sdk: ^3.11.0
 
 dependencies:
-  analysis_server_plugin: ^0.3.14
-  analyzer: ^12.1.0
+  analysis_server_plugin: ^0.3.15
+  analyzer: ^13.0.0
   async: ^2.13.1
 
 dev_dependencies:
