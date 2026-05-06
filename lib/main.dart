@@ -5,7 +5,6 @@ import 'package:analysis_server_plugin/registry.dart';
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
-import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/error/error.dart';
@@ -54,7 +53,7 @@ final class BootstrapBuildRunner extends AnalysisRule {
     RuleContext context,
   ) {
     final visitor = _Visitor(_runnerHook, context);
-    registry.addPartDirective(this, visitor);
+    registry.addCompilationUnit(this, visitor);
   }
 }
 
@@ -66,29 +65,7 @@ final class _Visitor extends SimpleAstVisitor<void> {
   final RuleContext context;
 
   @override
-  void visitPartDirective(PartDirective node) {
-    if (_runnerHook.running) return;
-
-    final package = context.package;
-    if (package == null) return;
-
-    final collections = AnalysisContextCollection(
-      includedPaths: [package.root.path],
-    );
-
-    for (final ctx in collections.contexts) {
-      final path = ctx.contextRoot.workspace.root;
-
-      if (!_runnerHook.hasBuildRunner(ctx.contextRoot)) {
-        _runnerHook.logPlugin(
-          "Unable to find `build_runner` dependency in $path"
-          "\n"
-          "Make sure `build_runner` is present as dependency in pubspec.yaml for $path",
-        );
-        continue;
-      }
-
-      _runnerHook.start(path);
-    }
+  void visitCompilationUnit(CompilationUnit node) {
+    _runnerHook.logPlugin("RRRRRRRRRRREEEEEEEEEEEE");
   }
 }
