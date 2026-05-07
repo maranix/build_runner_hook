@@ -10,14 +10,23 @@ import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/error/error.dart';
 
 import 'package:build_runner_hook/build_runner_manager.dart';
+import 'package:build_runner_hook/utils.dart';
 
 final plugin = BuildRunnerHook();
 
 final class BuildRunnerHook extends Plugin {
-  final BuildRunnerManager _runnerHook = BuildRunnerManager();
+  final BuildRunnerManager _runnerHook = BuildRunnerManager(
+    TempDirectory.resolveFor("./build_runner_hook"),
+  );
 
   @override
   String get name => "Build Runner Hook";
+
+  @override
+  FutureOr<void> start() async {
+    await _runnerHook.init();
+    return await super.start();
+  }
 
   @override
   FutureOr<void> register(PluginRegistry registry) {
@@ -28,8 +37,8 @@ final class BuildRunnerHook extends Plugin {
 
   @override
   FutureOr<void> shutDown() async {
-    await _runnerHook.stop();
-    return super.shutDown();
+    await _runnerHook.dispose();
+    return await super.shutDown();
   }
 }
 
@@ -66,6 +75,10 @@ final class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitCompilationUnit(CompilationUnit node) {
-    _runnerHook.logPlugin("RRRRRRRRRRREEEEEEEEEEEE");
+    final fragment = node.declaredFragment;
+    if (fragment == null) return;
+
+    final ctx = fragment.element.session.analysisContext.contextRoot;
+    _runnerHook.registerContext(ctx);
   }
 }
