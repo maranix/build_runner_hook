@@ -36,8 +36,6 @@ extension type TempFile._(io.File file) {
         ),
       );
 
-  io.File get asFile => file;
-
   bool get existsSync => file.existsSync();
   Future<bool> get exists => file.exists();
 
