@@ -22,7 +22,7 @@ final class BuildRunnerManager {
 
   final Map<String, ContextRoot> _pathToContextMap = {};
 
-  bool get isInitialized => _lock.existsSync;
+  bool get isInitialized => _lockSink != null && _logSink != null;
 
   Future<void> init() async {
     if (isInitialized) return;
