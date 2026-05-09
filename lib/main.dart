@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:analysis_server_plugin/plugin.dart';
 import 'package:analysis_server_plugin/registry.dart';
@@ -76,6 +75,8 @@ final class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitCompilationUnit(CompilationUnit node) {
+    if (!_runnerHook.isInitialized) return;
+
     final fragment = node.declaredFragment;
     if (fragment == null) return;
 

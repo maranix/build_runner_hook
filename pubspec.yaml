@@ -15,6 +15,9 @@ topics:
 environment:
   sdk: ^3.11.0
 
+executables:
+  cleanup: cleanup
+
 dependencies:
   analysis_server_plugin: ^0.3.15
   analyzer: ^13.0.0
