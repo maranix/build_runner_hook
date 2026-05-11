@@ -45,36 +45,19 @@ Future<void> _cleanupPackageDirectory(Directory directory, int ownerPid) async {
   }
 
   final liveOwners = await _removeStaleOwners(ownersDirectory);
-  if (liveOwners > 0) {
-    _log(
-      directory.path,
-      "Skipping cleanup: $liveOwners active owner(s) remaining",
-    );
-    return;
-  }
+  if (liveOwners > 0) return;
 
   final pidsFile = File(_join(directory.path, _pidsFilename));
   final pids = await _readBuildRunnerPids(pidsFile);
   for (final pid in pids) {
     try {
       Process.killPid(pid);
-      _log(directory.path, "Killed build_runner pid $pid");
     } catch (_) {}
   }
 
   if (await pidsFile.exists()) {
     await pidsFile.delete();
   }
-}
-
-void _log(String packageDir, String message) {
-  final logFile = File(_join(packageDir, "cleanup.log"));
-  final timestamp = DateTime.now().toIso8601String();
-  logFile.writeAsStringSync(
-    "TIMESTAMP $timestamp\t$message\n",
-    mode: FileMode.append,
-    flush: true,
-  );
 }
 
 Future<int> _removeStaleOwners(Directory ownersDirectory) async {

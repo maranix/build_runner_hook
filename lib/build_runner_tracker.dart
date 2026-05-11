@@ -46,7 +46,7 @@ final class BuildRunnerTracker {
         "$_ownerPid",
         if (waitForOwnerExit) "--watch",
       ],
-      mode: io.ProcessStartMode.detached,
+      mode: .detached,
     );
   }
 
@@ -57,7 +57,7 @@ final class BuildRunnerTracker {
     final ownerFile = io.File(p.join(ownersDir.path, "$_ownerPid.owner"));
     await ownerFile.writeAsString(
       "root=${p.normalize(rootPath)}\npid=$_ownerPid\n",
-      mode: io.FileMode.writeOnly,
+      mode: .writeOnly,
       flush: true,
     );
   }
@@ -75,7 +75,7 @@ final class BuildRunnerTracker {
     final pidsFile = io.File(p.join(packageDir(rootPath), "build_runner.pids"));
     await pidsFile.create(recursive: true);
 
-    final sink = pidsFile.openWrite(mode: io.FileMode.writeOnlyAppend);
+    final sink = pidsFile.openWrite(mode: .writeOnlyAppend);
     sink.writeln(pid);
     await sink.close();
   }
@@ -100,13 +100,7 @@ final class BuildRunnerTracker {
       }
     }
 
-    if (liveOwners > 0) {
-      _logCleanup(
-        packageDirStr,
-        "Skipping cleanup: $liveOwners active owner(s) remaining",
-      );
-      return;
-    }
+    if (liveOwners > 0) return;
 
     final pidsFile = io.File(p.join(packageDirStr, "build_runner.pids"));
     if (await pidsFile.exists()) {
@@ -116,22 +110,11 @@ final class BuildRunnerTracker {
         if (pid != null) {
           try {
             io.Process.killPid(pid);
-            _logCleanup(packageDirStr, "Killed build_runner pid $pid");
           } catch (_) {}
         }
       }
       await pidsFile.delete();
     }
-  }
-
-  void _logCleanup(String packageDir, String message) {
-    final logFile = io.File(p.join(packageDir, "cleanup.log"));
-    final timestamp = DateTime.now().toIso8601String();
-    logFile.writeAsStringSync(
-      "TIMESTAMP $timestamp\t$message\n",
-      mode: io.FileMode.append,
-      flush: true,
-    );
   }
 
   String packageDir(String rootPath) {

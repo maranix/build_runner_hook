@@ -88,7 +88,7 @@ final class BuildRunnerManager {
     final timestamp = DateTime.now().toIso8601String();
     logFile.writeAsStringSync(
       "TIMESTAMP $timestamp\t$message\n",
-      mode: io.FileMode.append,
+      mode: .append,
       flush: true,
     );
   }
