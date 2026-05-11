@@ -29,7 +29,7 @@ Enable the plugin in your project's `analysis_options.yaml`:
 # analysis_options.yaml
 
 plugins:
-  build_runner_hook: ^1.2.0
+  build_runner_hook: ^2.0.0
 ```
 
 That's it. The next time your IDE restarts the analysis server, the plugin will start automatically when it encounters a `part` directive in your source files.
@@ -68,33 +68,37 @@ The plugin writes plugin lifecycle events and `build_runner` process output to s
 
 ### Log file location
 
-The log files are written to your system's temporary directory:
+The plugin organizes state and logs into package-specific directories within your system's temporary directory. Each package you open gets its own unique directory named `<package_name>_<hash>`.
 
-| OS      | Path                                           |
-| ------- | ---------------------------------------------- |
-| macOS   | `$TMPDIR/build_runner_hook/brh.log` and `$TMPDIR/build_runner_hook/brh_<package>.log` |
-| Linux   | `$TMPDIR/build_runner_hook/brh.log` and `$TMPDIR/build_runner_hook/brh_<package>.log` |
-| Windows | `%TEMP%\build_runner_hook\brh.log` and `%TEMP%\build_runner_hook\brh_<package>.log` |
+| OS      | Path                                                                     |
+| ------- | ------------------------------------------------------------------------ |
+| macOS   | `$TMPDIR/build_runner_hook/<package_dir>/hook.log` and `build_runner.log` |
+| Linux   | `/tmp/build_runner_hook/<package_dir>/hook.log` and `build_runner.log`    |
+| Windows | `%TEMP%\build_runner_hook\<package_dir>\hook.log` and `build_runner.log` |
 
 ### Viewing logs
 
-**Tail the plugin log (macOS / Linux):**
+**Tail the plugin lifecycle log (macOS / Linux):**
 
 ```bash
-tail -f $TMPDIR/build_runner_hook/brh.log
+# Replace <package_dir> with your project's specific directory
+tail -f $TMPDIR/build_runner_hook/<package_dir>/hook.log
 ```
 
-**Tail a package `build_runner` log:**
+**Tail the `build_runner` process output:**
 
 ```bash
-tail -f $TMPDIR/build_runner_hook/brh_<package>.log
+tail -f $TMPDIR/build_runner_hook/<package_dir>/build_runner.log
 ```
 
-**View the full plugin log:**
+**Quickly find your log directory:**
 
 ```bash
-cat $TMPDIR/build_runner_hook/brh.log
+ls -dt $TMPDIR/build_runner_hook/*/ | head -n 1
 ```
+
+> [!NOTE]
+> The `<package_dir>` follows the format `name_hash` (e.g., `my_app_a1b2c3d4`). If you have multiple packages with the same name, the hash ensures they don't collide.
 
 > [!NOTE]
 > You can also restart the analysis server via `Dart: Restart Analysis Server` to re-trigger the plugin.
@@ -105,9 +109,9 @@ cat $TMPDIR/build_runner_hook/brh.log
 | -------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Generated files not updating     | `build_runner` is not in `dev_dependencies`       | Run `dart pub add --dev build_runner`                                                         |
 | Plugin not activating            | Missing `plugins` block in `analysis_options.yaml` | Add the installation configuration shown above                                                |
-| Plugin starts but skips startup  | Active package or workspace does not expose `build_runner` | Check `brh.log`, then add `build_runner` where the plugin is analyzing from                   |
-| `build_runner` crashes on start  | Dependency version conflict                       | Check `brh_<package>.log` for details, then run `dart pub upgrade`                            |
-| Workspace not detected correctly | `dart pub workspace list` cannot be resolved      | Verify your Dart SDK setup, then restart the analysis server and inspect `brh.log`            |
+| Plugin starts but skips startup  | Active package or workspace does not expose `build_runner` | Check `hook.log`, then add `build_runner` where the plugin is analyzing from                   |
+| `build_runner` crashes on start  | Dependency version conflict                       | Check `build_runner.log` for details, then run `dart pub upgrade`                             |
+| Workspace not detected correctly | `dart pub workspace list` cannot be resolved      | Verify your Dart SDK setup, then restart the analysis server and inspect `hook.log`            |
 
 ## Example
 
