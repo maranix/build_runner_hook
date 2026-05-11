@@ -5,20 +5,28 @@ import 'package:analysis_server_plugin/registry.dart';
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
-import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/error/error.dart';
 
 import 'package:build_runner_hook/build_runner_manager.dart';
+import 'package:build_runner_hook/utils.dart';
 
 final plugin = BuildRunnerHook();
 
 final class BuildRunnerHook extends Plugin {
-  final BuildRunnerManager _runnerHook = BuildRunnerManager();
+  final BuildRunnerManager _runnerHook = BuildRunnerManager(
+    TempDirectory.resolveFor("./build_runner_hook"),
+  );
 
   @override
   String get name => "Build Runner Hook";
+
+  @override
+  FutureOr<void> start() async {
+    await _runnerHook.init();
+    return await super.start();
+  }
 
   @override
   FutureOr<void> register(PluginRegistry registry) {
@@ -29,8 +37,8 @@ final class BuildRunnerHook extends Plugin {
 
   @override
   FutureOr<void> shutDown() async {
-    await _runnerHook.stop();
-    return super.shutDown();
+    await _runnerHook.dispose();
+    return await super.shutDown();
   }
 }
 
@@ -54,7 +62,7 @@ final class BootstrapBuildRunner extends AnalysisRule {
     RuleContext context,
   ) {
     final visitor = _Visitor(_runnerHook, context);
-    registry.addPartDirective(this, visitor);
+    registry.addCompilationUnit(this, visitor);
   }
 }
 
@@ -66,29 +74,13 @@ final class _Visitor extends SimpleAstVisitor<void> {
   final RuleContext context;
 
   @override
-  void visitPartDirective(PartDirective node) {
-    if (_runnerHook.running) return;
+  void visitCompilationUnit(CompilationUnit node) {
+    if (!_runnerHook.isInitialized) return;
 
-    final package = context.package;
-    if (package == null) return;
+    final fragment = node.declaredFragment;
+    if (fragment == null) return;
 
-    final collections = AnalysisContextCollection(
-      includedPaths: [package.root.path],
-    );
-
-    for (final ctx in collections.contexts) {
-      final path = ctx.contextRoot.workspace.root;
-
-      if (!_runnerHook.hasBuildRunner(ctx.contextRoot)) {
-        _runnerHook.logPlugin(
-          "Unable to find `build_runner` dependency in $path"
-          "\n"
-          "Make sure `build_runner` is present as dependency in pubspec.yaml for $path",
-        );
-        continue;
-      }
-
-      _runnerHook.start(path);
-    }
+    final ctx = fragment.element.session.analysisContext.contextRoot;
+    _runnerHook.registerContext(ctx);
   }
 }

@@ -1,146 +1,106 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
+import 'dart:io' as io;
 
 import 'package:analyzer/dart/analysis/context_root.dart';
-import 'package:async/async.dart';
-
-final _logUri = Directory.systemTemp.uri;
-final _pluginLogUri = _logUri.resolve("./brh.log");
+import 'package:build_runner_hook/build_runner_tracker.dart';
+import 'package:build_runner_hook/config.dart';
+import 'package:build_runner_hook/process_context.dart';
+import 'package:build_runner_hook/utils.dart';
+import 'package:path/path.dart' as p;
 
 final class BuildRunnerManager {
-  BuildRunnerManager()
-    : _pluginSink = File(
-        _pluginLogUri.toFilePath(),
-      ).openWrite(mode: .writeOnly);
+  BuildRunnerManager(TempDirectory temp) : _temp = temp {
+    _tracker = BuildRunnerTracker(temp);
 
-  final IOSink _pluginSink;
+    if (!_temp.asDirectory.existsSync()) {
+      _temp.asDirectory.createSync();
+    }
+  }
 
-  IOSink? _buildRunnerSink;
-  Process? _process;
+  final TempDirectory _temp;
+  late final BuildRunnerTracker _tracker;
 
-  final _stdGroup = StreamGroup<List<int>>();
-  StreamSubscription<String>? _stdGroupSubscription;
+  final Map<String, ProcessContext> _pathToContextMap = {};
+  final Set<String> _pendingRootPaths = {};
 
-  bool _running = false;
-  bool get running => _running;
+  bool _initialized = false;
+  bool get isInitialized => _initialized;
 
-  void start(String path) async {
-    if (_running) return;
-
-    _running = true;
-
-    final pkg = getPkgNameFromPath(path);
-
-    logPlugin("Creating log for $pkg package");
-
-    _buildRunnerSink = File(
-      _logUri.resolve("./brh_$pkg.log").toFilePath(),
-    ).openWrite(mode: .writeOnly);
+  Future<void> init() async {
+    if (_initialized) return;
 
     try {
-      final isWorkspace = await _isDartWorkspace(path);
-      final args = [
-        "run",
-        "build_runner",
-        "watch",
-        if (isWorkspace) "--workspace",
-      ];
-
-      logPlugin("Starting Build Runner in $path using ${args.skip(1)}");
-
-      _process = await Process.start("dart", args, workingDirectory: path);
-
-      logPlugin("Attching stdout & stderr to Log File");
-
-      _stdGroup
-        ..add(_process!.stdout)
-        ..add(_process!.stderr);
-
-      _stdGroupSubscription = _stdGroup.stream
-          .transform(Utf8Decoder())
-          .listen(logBuildRunner);
-
-      logPlugin("Build Runner running in $path");
-    } catch (e) {
-      logPlugin("Error running Build Runner: $e");
-      _running = false;
+      await _tracker.cleanupAll();
+      await _tracker.startDetachedWatchdog();
+      _initialized = true;
+    } catch (_) {
+      // Ignore init errors
     }
   }
 
-  Future<void> stop() async {
-    logPlugin("Stopping Build Runner");
+  void registerContext(ContextRoot ctx) {
+    final path = ctx.root.path;
 
-    await _stdGroupSubscription?.cancel();
-    await _stdGroup.close();
+    if (_pathToContextMap.containsKey(path)) return;
+    if (_pendingRootPaths.contains(path)) return;
 
-    await _buildRunnerSink?.close();
-    _process?.kill();
-
-    logPlugin("Build Runner stopped");
-    await _pluginSink.close();
+    _pendingRootPaths.add(path);
+    unawaited(_registerContext(ctx));
   }
 
-  void logPlugin(String message) {
-    final timestamp = DateTime.now();
-    _pluginSink.writeln("Timestamp $timestamp\t$message");
-  }
+  Future<void> _registerContext(ContextRoot ctx) async {
+    final path = ctx.root.path;
 
-  void logBuildRunner(String message) {
-    final timestamp = DateTime.now();
-    _buildRunnerSink?.writeln("Timestamp $timestamp\t$message");
-  }
-
-  String getPkgNameFromPath(String path) {
-    var start = path.length - 1;
-
-    while (start >= 0) {
-      if (path[start] == Platform.pathSeparator) {
-        break;
-      }
-
-      start--;
-    }
-
-    return path.substring(start + 1, path.length);
-  }
-
-  bool hasBuildRunner(ContextRoot ctx) {
-    for (final pkg in ctx.workspace.packages.packages) {
-      if (pkg.name == "build_runner") return true;
-    }
-
-    return false;
-  }
-
-  Future<bool> _isDartWorkspace(String path) async {
     try {
-      final process = await Process.start("dart", [
-        "pub",
-        "workspace",
-        "list",
-      ], workingDirectory: path);
+      await _tracker.registerOwner(path);
 
-      final pkgCount = await process.stdout
-          .transform(Utf8Decoder())
-          .transform(LineSplitter())
-          .skip(1)
-          .fold(0, (prev, next) {
-            if (next.isEmpty) return prev;
+      final config = await HookConfig.resolve(path);
+      final packageDir = _tracker.packageDir(path);
 
-            return prev + 1;
-          });
-
-      process.kill();
-      return pkgCount > 1;
-    } catch (e) {
-      logPlugin(
-        "Unable to determine whether $path is in a Dart Workspace"
-        "\n"
-        "${e.toString()}",
+      final processContext = ProcessContext(
+        ctx,
+        packageDirectory: packageDir,
+        log: (msg) => _logPackage(packageDir, msg),
+        onStarted: _onProcessStarted,
+        buildFilters: config.buildFilters,
       );
 
-      return false;
+      _pathToContextMap[path] = processContext;
+      _logPackage(packageDir, "$path registered!");
+      unawaited(processContext.start());
+    } catch (_) {
+      // Ignore registration errors
+    } finally {
+      _pendingRootPaths.remove(path);
     }
+  }
+
+  void _onProcessStarted(ProcessContext context, int pid) {
+    unawaited(_tracker.recordBuildRunnerPid(context.rootPath, pid));
+    _logPackage(
+      _tracker.packageDir(context.rootPath),
+      "${context.rootPath} build_runner started with pid $pid",
+    );
+  }
+
+  void _logPackage(String packageDir, String message) {
+    final logFile = io.File(p.join(packageDir, "hook.log"));
+    final timestamp = DateTime.now().toIso8601String();
+    logFile.writeAsStringSync(
+      "TIMESTAMP $timestamp\t$message\n",
+      mode: .append,
+      flush: true,
+    );
+  }
+
+  Future<void> dispose() async {
+    await _tracker.startDetachedCleanup();
+    await Future.wait(_pathToContextMap.keys.map(_tracker.removeOwner));
+    await Future.wait(
+      _pathToContextMap.values.map((context) => context.dispose()),
+    );
+    await _tracker.cleanupAll();
+
+    _pathToContextMap.clear();
   }
 }
