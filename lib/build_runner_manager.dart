@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' as io;
 
 import 'package:analyzer/dart/analysis/context_root.dart';
+import 'package:build_runner_hook/config.dart';
 import 'package:build_runner_hook/process_context.dart';
 import 'package:build_runner_hook/runtime_registry.dart';
 import 'package:build_runner_hook/utils.dart';
@@ -73,11 +74,14 @@ final class BuildRunnerManager {
     try {
       await _runtime.registerOwner(path);
 
+      final config = await HookConfig.resolve(path);
+
       final processContext = ProcessContext(
         ctx,
         temp: _temp,
         log: _logMessage,
         onStarted: _onProcessStarted,
+        buildFilters: config.buildFilters,
       );
 
       _pathToContextMap[path] = processContext;
@@ -90,13 +94,9 @@ final class BuildRunnerManager {
     }
   }
 
-  void _recordBuildRunnerPid(ProcessContext context, int pid) {
+  void _onProcessStarted(ProcessContext context, int pid) {
     unawaited(_runtime.recordBuildRunnerPid(context.rootPath, pid));
     _logMessage("${context.rootPath} build_runner started with pid $pid");
-  }
-
-  void _onProcessStarted(ProcessContext context, int pid) {
-    _recordBuildRunnerPid(context, pid);
   }
 
   Future<void> dispose() async {

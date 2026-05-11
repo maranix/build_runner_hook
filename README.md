@@ -34,7 +34,22 @@ plugins:
 
 That's it. The next time your IDE restarts the analysis server, the plugin will start automatically when it encounters a `part` directive in your source files.
 
-### How startup works
+## Configuration
+
+You can customize the plugin by adding a `build_runner_hook.yaml` file in your project root or any parent directory. The configuration structure is designed to be intuitive and closely follows the `build_runner` CLI options.
+
+### `build_filter`
+
+Maps directly to the `--build-filter` option of the `build_runner` CLI. It limits which files get built, and multiple filters are ORed together.
+
+```yaml
+# build_runner_hook.yaml
+build_filter:
+  - "lib/models/*.g.dart"
+  - "test/**"
+```
+
+## How startup works
 
 - Regular package: runs `dart run build_runner watch`
 - Dart workspace: runs `dart run build_runner watch --workspace`

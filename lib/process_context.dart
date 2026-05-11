@@ -18,6 +18,7 @@ final class ProcessContext {
     required TempDirectory temp,
     required ProcessLogger log,
     required ProcessStarted onStarted,
+    this.buildFilters = const [],
   }) : _temp = temp,
        _log = log,
        _onStarted = onStarted;
@@ -26,6 +27,7 @@ final class ProcessContext {
   final TempDirectory _temp;
   final ProcessLogger _log;
   final ProcessStarted _onStarted;
+  final List<String> buildFilters;
 
   io.Process? _process;
   io.IOSink? _logSink;
@@ -58,10 +60,13 @@ final class ProcessContext {
     final isWorkspace = await _isDartWorkspace();
 
     try {
-      final args = switch (isWorkspace) {
-        true => _watchWorkspaceArgs,
-        false => _watchArgs,
-      };
+      final args = [
+        ...switch (isWorkspace) {
+          true => _watchWorkspaceArgs,
+          false => _watchArgs,
+        },
+        for (final filter in buildFilters) '--build-filter=$filter',
+      ];
 
       final process = await io.Process.start(
         "dart",

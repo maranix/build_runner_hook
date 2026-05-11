@@ -78,7 +78,7 @@ final class RuntimeRegistry {
         "$_ownerPid",
         if (waitForOwnerExit) "--watch",
       ],
-      mode: io.ProcessStartMode.detached,
+      mode: .detached,
     );
   }
 
@@ -94,7 +94,7 @@ final class RuntimeRegistry {
         "createdAt=${_now().toIso8601String()}",
         "",
       ].join("\n"),
-      mode: io.FileMode.writeOnly,
+      mode: .writeOnly,
       flush: true,
     );
   }
