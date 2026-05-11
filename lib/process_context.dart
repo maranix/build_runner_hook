@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:analyzer/dart/analysis/context_root.dart';
-import 'package:build_runner_hook/utils.dart';
+import 'package:path/path.dart' as p;
 
 typedef ProcessLogger = void Function(String message);
 typedef ProcessStarted = void Function(ProcessContext context, int pid);
@@ -15,16 +15,16 @@ const _workspaceArgs = ["pub", "workspace", "list"];
 final class ProcessContext {
   ProcessContext(
     this.contextRoot, {
-    required TempDirectory temp,
+    required String packageDirectory,
     required ProcessLogger log,
     required ProcessStarted onStarted,
     this.buildFilters = const [],
-  }) : _temp = temp,
+  }) : _packageDirectory = packageDirectory,
        _log = log,
        _onStarted = onStarted;
 
   final ContextRoot contextRoot;
-  final TempDirectory _temp;
+  final String _packageDirectory;
   final ProcessLogger _log;
   final ProcessStarted _onStarted;
   final List<String> buildFilters;
@@ -53,7 +53,7 @@ final class ProcessContext {
       return;
     }
 
-    final logFile = await _createLogFile(packageName);
+    final logFile = await _createLogFile();
     _logSink = logFile.openWrite(mode: .writeOnly);
     _writeLog("Starting build_runner for $packageName in $rootPath");
 
@@ -98,15 +98,14 @@ final class ProcessContext {
     }
   }
 
-  Future<io.File> _createLogFile(String packageName) async {
-    final filename = "brh_$packageName.log";
-    final logFile = TempFile.fromPath(_temp.asDirectory.path, filename);
+  Future<io.File> _createLogFile() async {
+    final logFile = io.File(p.join(_packageDirectory, "build_runner.log"));
 
-    if (await logFile.exists) {
+    if (await logFile.exists()) {
       await logFile.delete();
     }
 
-    return logFile.create();
+    return logFile.create(recursive: true);
   }
 
   Future<void> _watchExit(io.Process process) async {

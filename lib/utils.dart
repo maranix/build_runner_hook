@@ -14,45 +14,4 @@ extension type TempDirectory._(String path) {
       );
 
   io.Directory get asDirectory => io.Directory(path);
-
-  io.File file(String filename) => io.File(
-    p.normalize(
-      p.join(path, filename),
-    ),
-  );
-
-  io.Directory directory(String dirname) => io.Directory(
-    p.normalize(
-      p.join(path, dirname),
-    ),
-  );
-}
-
-extension type TempFile._(io.File file) {
-  TempFile.fromPath(String path, String filename)
-    : file = io.File(
-        p.normalize(
-          p.join(path, filename),
-        ),
-      );
-
-  bool get existsSync => file.existsSync();
-  Future<bool> get exists => file.exists();
-
-  Future<io.File> create({
-    bool recursive = false,
-    bool exclusive = false,
-  }) async {
-    final exists = await file.exists();
-    if (exists) return file;
-
-    return file.create(recursive: recursive, exclusive: exclusive);
-  }
-
-  Future<void> delete({bool recursive = false}) async {
-    final exists = await file.exists();
-    if (!exists) return;
-
-    await file.delete(recursive: recursive);
-  }
 }

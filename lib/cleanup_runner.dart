@@ -14,23 +14,15 @@ Future<void> main(List<String> args) async {
   if (ownerPid == null) exit(64);
   final watchOwner = args.contains("--watch");
 
-  final log = File(_join(tempDirectory.path, "cleanup.log"));
-  final logSink = log.openWrite(mode: FileMode.writeOnlyAppend);
+  if (watchOwner) {
+    await _waitForProcessExit(ownerPid);
+  }
 
-  try {
-    if (watchOwner) {
-      logSink.writeln("Watching owner pid $ownerPid");
-      await _waitForProcessExit(ownerPid);
-    }
+  if (!await tempDirectory.exists()) return;
 
-    if (!await tempDirectory.exists()) return;
-
-    await for (final entity in tempDirectory.list()) {
-      if (entity is! Directory) continue;
-      await _cleanupPackageDirectory(entity, ownerPid, logSink);
-    }
-  } finally {
-    await logSink.close();
+  await for (final entity in tempDirectory.list()) {
+    if (entity is! Directory) continue;
+    await _cleanupPackageDirectory(entity, ownerPid);
   }
 }
 
@@ -40,25 +32,23 @@ Future<void> _waitForProcessExit(int pid) async {
   }
 }
 
-Future<void> _cleanupPackageDirectory(
-  Directory directory,
-  int ownerPid,
-  IOSink logSink,
-) async {
+Future<void> _cleanupPackageDirectory(Directory directory, int ownerPid) async {
   final ownersDirectory = Directory(
     _join(directory.path, _ownersDirectoryName),
   );
   final ownerFile = File(
     _join(ownersDirectory.path, "$ownerPid$_ownerExtension"),
   );
+
   if (await ownerFile.exists()) {
     await ownerFile.delete();
   }
 
   final liveOwners = await _removeStaleOwners(ownersDirectory);
   if (liveOwners > 0) {
-    logSink.writeln(
-      "${directory.path} has $liveOwners active owner(s); skipping",
+    _log(
+      directory.path,
+      "Skipping cleanup: $liveOwners active owner(s) remaining",
     );
     return;
   }
@@ -66,17 +56,25 @@ Future<void> _cleanupPackageDirectory(
   final pidsFile = File(_join(directory.path, _pidsFilename));
   final pids = await _readBuildRunnerPids(pidsFile);
   for (final pid in pids) {
-    final killed = Process.killPid(pid);
-    logSink.writeln(
-      killed
-          ? "${directory.path} killed build_runner pid $pid"
-          : "${directory.path} unable to kill build_runner pid $pid",
-    );
+    try {
+      Process.killPid(pid);
+      _log(directory.path, "Killed build_runner pid $pid");
+    } catch (_) {}
   }
 
   if (await pidsFile.exists()) {
     await pidsFile.delete();
   }
+}
+
+void _log(String packageDir, String message) {
+  final logFile = File(_join(packageDir, "cleanup.log"));
+  final timestamp = DateTime.now().toIso8601String();
+  logFile.writeAsStringSync(
+    "TIMESTAMP $timestamp\t$message\n",
+    mode: FileMode.append,
+    flush: true,
+  );
 }
 
 Future<int> _removeStaleOwners(Directory ownersDirectory) async {

@@ -5,12 +5,12 @@ import 'package:build_runner_hook/utils.dart';
 import 'package:path/path.dart' as p;
 
 final class BuildRunnerTracker {
-  BuildRunnerTracker(this._temp, {void Function(String)? log}) : _log = log;
+  BuildRunnerTracker(this._temp);
 
-  static const _cleanupRunnerUri = "package:build_runner_hook/cleanup_runner.dart";
+  static const _cleanupRunnerUri =
+      "package:build_runner_hook/cleanup_runner.dart";
 
   final TempDirectory _temp;
-  final void Function(String)? _log;
   final int _ownerPid = io.pid;
 
   Future<void> cleanupAll() async {
@@ -33,11 +33,10 @@ final class BuildRunnerTracker {
   }
 
   Future<void> _startDetached({required bool waitForOwnerExit}) async {
-    final cleanupUri = await Isolate.resolvePackageUri(Uri.parse(_cleanupRunnerUri));
-    if (cleanupUri == null) {
-      _log?.call("Unable to resolve cleanup runner");
-      return;
-    }
+    final cleanupUri = await Isolate.resolvePackageUri(
+      Uri.parse(_cleanupRunnerUri),
+    );
+    if (cleanupUri == null) return;
 
     await io.Process.start(
       io.Platform.resolvedExecutable,
@@ -52,7 +51,7 @@ final class BuildRunnerTracker {
   }
 
   Future<void> registerOwner(String rootPath) async {
-    final ownersDir = io.Directory(p.join(_packageDir(rootPath), "owners"));
+    final ownersDir = io.Directory(p.join(packageDir(rootPath), "owners"));
     await ownersDir.create(recursive: true);
 
     final ownerFile = io.File(p.join(ownersDir.path, "$_ownerPid.owner"));
@@ -64,14 +63,16 @@ final class BuildRunnerTracker {
   }
 
   Future<void> removeOwner(String rootPath) async {
-    final ownerFile = io.File(p.join(_packageDir(rootPath), "owners", "$_ownerPid.owner"));
+    final ownerFile = io.File(
+      p.join(packageDir(rootPath), "owners", "$_ownerPid.owner"),
+    );
     if (await ownerFile.exists()) {
       await ownerFile.delete();
     }
   }
 
   Future<void> recordBuildRunnerPid(String rootPath, int pid) async {
-    final pidsFile = io.File(p.join(_packageDir(rootPath), "build_runner.pids"));
+    final pidsFile = io.File(p.join(packageDir(rootPath), "build_runner.pids"));
     await pidsFile.create(recursive: true);
 
     final sink = pidsFile.openWrite(mode: io.FileMode.writeOnlyAppend);
@@ -80,9 +81,9 @@ final class BuildRunnerTracker {
   }
 
   Future<void> cleanupPackage(String path, {bool isPackageDir = false}) async {
-    final packageDir = isPackageDir ? path : _packageDir(path);
-    final ownersDir = io.Directory(p.join(packageDir, "owners"));
-    
+    final packageDirStr = isPackageDir ? path : packageDir(path);
+    final ownersDir = io.Directory(p.join(packageDirStr, "owners"));
+
     var liveOwners = 0;
     if (await ownersDir.exists()) {
       await for (final entity in ownersDir.list()) {
@@ -90,7 +91,7 @@ final class BuildRunnerTracker {
 
         final pidString = p.basename(entity.path).replaceAll('.owner', '');
         final pid = int.tryParse(pidString);
-        
+
         if (pid != null && await _isProcessAlive(pid)) {
           liveOwners++;
         } else {
@@ -100,11 +101,14 @@ final class BuildRunnerTracker {
     }
 
     if (liveOwners > 0) {
-      _log?.call("$packageDir has $liveOwners active owner(s); skipping cleanup");
+      _logCleanup(
+        packageDirStr,
+        "Skipping cleanup: $liveOwners active owner(s) remaining",
+      );
       return;
     }
 
-    final pidsFile = io.File(p.join(packageDir, "build_runner.pids"));
+    final pidsFile = io.File(p.join(packageDirStr, "build_runner.pids"));
     if (await pidsFile.exists()) {
       final lines = await pidsFile.readAsLines();
       for (final line in lines) {
@@ -112,22 +116,33 @@ final class BuildRunnerTracker {
         if (pid != null) {
           try {
             io.Process.killPid(pid);
-            _log?.call("Killed build_runner pid $pid for $packageDir");
-          } catch (_) {
-             // Ignore kill errors
-          }
+            _logCleanup(packageDirStr, "Killed build_runner pid $pid");
+          } catch (_) {}
         }
       }
       await pidsFile.delete();
     }
   }
 
-  String _packageDir(String rootPath) {
+  void _logCleanup(String packageDir, String message) {
+    final logFile = io.File(p.join(packageDir, "cleanup.log"));
+    final timestamp = DateTime.now().toIso8601String();
+    logFile.writeAsStringSync(
+      "TIMESTAMP $timestamp\t$message\n",
+      mode: io.FileMode.append,
+      flush: true,
+    );
+  }
+
+  String packageDir(String rootPath) {
     final normalized = p.normalize(rootPath);
     final name = p.basename(normalized);
     final hash = normalized.hashCode.toRadixString(16);
-    
-    return p.join(_temp.asDirectory.path, "${name.isEmpty ? "root" : name}_$hash");
+
+    return p.join(
+      _temp.asDirectory.path,
+      "${name.isEmpty ? "root" : name}_$hash",
+    );
   }
 
   static Future<bool> _isProcessAlive(int pid) async {
@@ -136,8 +151,13 @@ final class BuildRunnerTracker {
 
     try {
       if (io.Platform.isWindows) {
-        final result = await io.Process.run("tasklist", ["/FI", "PID eq $pid", "/NH"]);
-        return result.exitCode == 0 && result.stdout.toString().contains("$pid");
+        final result = await io.Process.run("tasklist", [
+          "/FI",
+          "PID eq $pid",
+          "/NH",
+        ]);
+        return result.exitCode == 0 &&
+            result.stdout.toString().contains("$pid");
       }
       final result = await io.Process.run("kill", ["-0", "$pid"]);
       return result.exitCode == 0;
