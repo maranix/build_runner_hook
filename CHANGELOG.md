@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Simplified the shared process tracking logic and renamed the core registry to `BuildRunnerTracker`.
+- Removed over-abstracted wrapper functions, type aliases, and complex dependency injection in favor of a straightforward implementation.
 - Cleanup state is now stored per package under the plugin temp directory instead of using a single global lock file.
 - Cleanup now runs through internal plugin code instead of requiring a package executable resolved from the user's project.
 

@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:io' as io;
 
 import 'package:analyzer/dart/analysis/context_root.dart';
+import 'package:build_runner_hook/build_runner_tracker.dart';
 import 'package:build_runner_hook/config.dart';
 import 'package:build_runner_hook/process_context.dart';
-import 'package:build_runner_hook/runtime_registry.dart';
 import 'package:build_runner_hook/utils.dart';
 
 final class BuildRunnerManager {
   BuildRunnerManager(TempDirectory temp)
     : _temp = temp,
       _log = TempFile.fromPath(temp.asDirectory.path, "./brh.log") {
-    _runtime = RuntimeRegistry(temp, log: _logMessage);
+    _tracker = BuildRunnerTracker(temp, log: _logMessage);
 
     if (!_temp.asDirectory.existsSync()) {
       _temp.asDirectory.createSync();
@@ -20,7 +20,7 @@ final class BuildRunnerManager {
 
   final TempDirectory _temp;
   final TempFile _log;
-  late final RuntimeRegistry _runtime;
+  late final BuildRunnerTracker _tracker;
 
   io.IOSink? _logSink;
 
@@ -34,8 +34,8 @@ final class BuildRunnerManager {
 
     try {
       await _initializeLog();
-      await _runtime.cleanupAll();
-      await _runtime.startDetachedWatchdog();
+      await _tracker.cleanupAll();
+      await _tracker.startDetachedWatchdog();
     } catch (e) {
       _logMessage(e.toString());
     }
@@ -72,7 +72,7 @@ final class BuildRunnerManager {
     final path = ctx.root.path;
 
     try {
-      await _runtime.registerOwner(path);
+      await _tracker.registerOwner(path);
 
       final config = await HookConfig.resolve(path);
 
@@ -95,17 +95,17 @@ final class BuildRunnerManager {
   }
 
   void _onProcessStarted(ProcessContext context, int pid) {
-    unawaited(_runtime.recordBuildRunnerPid(context.rootPath, pid));
+    unawaited(_tracker.recordBuildRunnerPid(context.rootPath, pid));
     _logMessage("${context.rootPath} build_runner started with pid $pid");
   }
 
   Future<void> dispose() async {
-    await _runtime.startDetachedCleanup();
-    await Future.wait(_pathToContextMap.keys.map(_runtime.removeOwner));
+    await _tracker.startDetachedCleanup();
+    await Future.wait(_pathToContextMap.keys.map(_tracker.removeOwner));
     await Future.wait(
       _pathToContextMap.values.map((context) => context.dispose()),
     );
-    await _runtime.cleanupAll();
+    await _tracker.cleanupAll();
 
     if (_logSink != null) {
       await _logSink!.close();
