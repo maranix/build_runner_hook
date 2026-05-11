@@ -1,6 +1,6 @@
 name: build_runner_hook
 description: An analyzer plugin for automatically running build_runner
-version: 2.0.0
+version: 2.0.1
 homepage: https://github.com/maranix/build_runner_hook
 repository: https://github.com/maranix/build_runner_hook
 issues: https://github.com/maranix/build_runner_hook/issues
