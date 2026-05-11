@@ -11,7 +11,7 @@ An [analyzer plugin](https://dart.dev/tools/analysis) that automatically runs [`
 - **Workspace-aware startup** — In Dart workspaces, the plugin starts `build_runner watch --workspace` from the workspace root.
 - **Dependency guard** — Startup is skipped when `build_runner` is not available in the current package or workspace, and the reason is logged.
 - **Runs in the background** — No terminal windows to manage. The plugin spawns and manages the `build_runner` process for you.
-- **Graceful lifecycle** — The process is cleanly stopped when the analyzer shuts down.
+- **Package-scoped cleanup** — Multiple IDE windows can share a package safely; `build_runner` is stopped only after the last analyzer instance for that package exits.
 - **Structured logging** — Plugin lifecycle events and `build_runner` output are written to separate timestamped log files for easier debugging.
 
 ## Getting Started
@@ -41,6 +41,12 @@ That's it. The next time your IDE restarts the analysis server, the plugin will 
 
 If `build_runner` is not present in the active analysis context, startup is skipped.
 
+### How cleanup works
+
+The plugin records runtime state per package in the system temp directory. Each analyzer instance gets its own owner marker, and each package records the `build_runner` PIDs it started.
+
+When an analyzer instance starts, the plugin also starts a detached cleanup watchdog. The watchdog waits for that analyzer process to exit, removes only that instance's owner marker, and stops `build_runner` for a package only when no other live owner remains. This keeps code generation running when the same package is open in multiple IDE windows.
+
 ## Logs & Troubleshooting
 
 The plugin writes plugin lifecycle events and `build_runner` process output to separate log files. These are the first places to check if code generation is not working as expected.
@@ -51,28 +57,28 @@ The log files are written to your system's temporary directory:
 
 | OS      | Path                                           |
 | ------- | ---------------------------------------------- |
-| macOS   | `$TMPDIR/brh.log` and `$TMPDIR/brh_<package>.log` |
-| Linux   | `$TMPDIR/brh.log` and `$TMPDIR/brh_<package>.log` |
-| Windows | `%TEMP%\brh.log` and `%TEMP%\brh_<package>.log` |
+| macOS   | `$TMPDIR/build_runner_hook/brh.log` and `$TMPDIR/build_runner_hook/brh_<package>.log` |
+| Linux   | `$TMPDIR/build_runner_hook/brh.log` and `$TMPDIR/build_runner_hook/brh_<package>.log` |
+| Windows | `%TEMP%\build_runner_hook\brh.log` and `%TEMP%\build_runner_hook\brh_<package>.log` |
 
 ### Viewing logs
 
 **Tail the plugin log (macOS / Linux):**
 
 ```bash
-tail -f $TMPDIR/brh.log
+tail -f $TMPDIR/build_runner_hook/brh.log
 ```
 
 **Tail a package `build_runner` log:**
 
 ```bash
-tail -f $TMPDIR/brh_<package>.log
+tail -f $TMPDIR/build_runner_hook/brh_<package>.log
 ```
 
 **View the full plugin log:**
 
 ```bash
-cat $TMPDIR/brh.log
+cat $TMPDIR/build_runner_hook/brh.log
 ```
 
 > [!NOTE]

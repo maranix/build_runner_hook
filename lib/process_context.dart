@@ -113,6 +113,18 @@ final class ProcessContext {
     }
   }
 
+  Future<void> dispose() async {
+    await Future.wait([
+      if (_stdoutSubscription != null) _stdoutSubscription!.cancel(),
+      if (_stderrSubscription != null) _stderrSubscription!.cancel(),
+      if (_logSink != null) _logSink!.close(),
+    ]);
+
+    _stdoutSubscription = null;
+    _stderrSubscription = null;
+    _logSink = null;
+  }
+
   String _readPackageName() {
     var start = rootPath.length - 1;
 

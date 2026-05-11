@@ -3,49 +3,41 @@ import 'dart:io' as io;
 
 import 'package:analyzer/dart/analysis/context_root.dart';
 import 'package:build_runner_hook/process_context.dart';
+import 'package:build_runner_hook/runtime_registry.dart';
 import 'package:build_runner_hook/utils.dart';
 
 final class BuildRunnerManager {
   BuildRunnerManager(TempDirectory temp)
     : _temp = temp,
-      _lock = TempFile.fromPath(temp.asDirectory.path, "./brh.lock"),
       _log = TempFile.fromPath(temp.asDirectory.path, "./brh.log") {
+    _runtime = RuntimeRegistry(temp, log: _logMessage);
+
     if (!_temp.asDirectory.existsSync()) {
       _temp.asDirectory.createSync();
     }
   }
 
   final TempDirectory _temp;
-  final TempFile _lock;
   final TempFile _log;
+  late final RuntimeRegistry _runtime;
 
-  io.IOSink? _lockSink;
   io.IOSink? _logSink;
 
   final Map<String, ProcessContext> _pathToContextMap = {};
+  final Set<String> _pendingRootPaths = {};
 
-  bool get isInitialized => _lockSink != null && _logSink != null;
+  bool get isInitialized => _logSink != null;
 
   Future<void> init() async {
     if (isInitialized) return;
 
     try {
-      await Future.wait([
-        _initializeLog(),
-        _initializeLock(),
-      ]);
+      await _initializeLog();
+      await _runtime.cleanupAll();
+      await _runtime.startDetachedWatchdog();
     } catch (e) {
       _logMessage(e.toString());
     }
-  }
-
-  Future<void> _initializeLock() async {
-    final lockExists = await _lock.exists;
-
-    if (lockExists) await _runCleanup();
-
-    final file = await _lock.create();
-    _lockSink = file.openWrite(mode: .writeOnly);
   }
 
   Future<void> _initializeLog() async {
@@ -65,49 +57,59 @@ final class BuildRunnerManager {
     _logSink?.writeln("TIMESTAMP $timestamp\t$message");
   }
 
-  Future<void> _runCleanup() async {
-    await io.Process.start(
-      "dart",
-      ["run", "build_runner_hook:cleanup"],
-      mode: .detached,
-      workingDirectory: _pathToContextMap.isNotEmpty
-          ? _pathToContextMap.keys.first
-          : null,
-    );
-  }
-
   void registerContext(ContextRoot ctx) {
     final path = ctx.root.path;
 
     if (_pathToContextMap.containsKey(path)) return;
+    if (_pendingRootPaths.contains(path)) return;
 
-    final processContext = ProcessContext(
-      ctx,
-      temp: _temp,
-      log: _logMessage,
-      onStarted: _onProcessStarted,
-    );
-
-    _pathToContextMap[path] = processContext;
-    _logMessage("$path registered!");
-    unawaited(processContext.start());
+    _pendingRootPaths.add(path);
+    unawaited(_registerContext(ctx));
   }
 
-  void _writeProcessLock(ProcessContext context, int pid) {
-    _lockSink?.writeln("${context.rootPath}\t$pid");
+  Future<void> _registerContext(ContextRoot ctx) async {
+    final path = ctx.root.path;
+
+    try {
+      await _runtime.registerOwner(path);
+
+      final processContext = ProcessContext(
+        ctx,
+        temp: _temp,
+        log: _logMessage,
+        onStarted: _onProcessStarted,
+      );
+
+      _pathToContextMap[path] = processContext;
+      _logMessage("$path registered!");
+      unawaited(processContext.start());
+    } catch (e) {
+      _logMessage("Failed to register $path: $e");
+    } finally {
+      _pendingRootPaths.remove(path);
+    }
+  }
+
+  void _recordBuildRunnerPid(ProcessContext context, int pid) {
+    unawaited(_runtime.recordBuildRunnerPid(context.rootPath, pid));
     _logMessage("${context.rootPath} build_runner started with pid $pid");
   }
 
   void _onProcessStarted(ProcessContext context, int pid) {
-    _writeProcessLock(context, pid);
+    _recordBuildRunnerPid(context, pid);
   }
 
   Future<void> dispose() async {
-    await Future.wait([
-      _runCleanup(),
-      if (_logSink != null) _logSink!.close(),
-      if (_lockSink != null) _lockSink!.close(),
-    ]);
+    await _runtime.startDetachedCleanup();
+    await Future.wait(_pathToContextMap.keys.map(_runtime.removeOwner));
+    await Future.wait(
+      _pathToContextMap.values.map((context) => context.dispose()),
+    );
+    await _runtime.cleanupAll();
+
+    if (_logSink != null) {
+      await _logSink!.close();
+    }
 
     _pathToContextMap.clear();
   }

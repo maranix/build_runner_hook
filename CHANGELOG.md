@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Package-scoped process ownership so multiple IDE or analyzer instances can safely work on the same package without killing each other's `build_runner` process.
+- A detached cleanup watchdog that removes orphaned package owners and stops `build_runner` when the last analyzer instance for a package exits.
+- Unit tests for package runtime ownership, stale owner cleanup, and malformed PID handling.
+
+### Changed
+
+- Cleanup state is now stored per package under the plugin temp directory instead of using a single global lock file.
+- Cleanup now runs through internal plugin code instead of requiring a package executable resolved from the user's project.
+
 ## 1.2.0
 
 ### Added
