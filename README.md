@@ -18,7 +18,7 @@ An [analyzer plugin](https://dart.dev/tools/analysis) that automatically runs [`
 
 ### Prerequisites
 
-- Dart SDK `^3.11.0`
+- Dart SDK `^3.12.0`
 - A project that uses [`build_runner`](https://pub.dev/packages/build_runner) for code generation (e.g., `json_serializable`, `freezed`, `dart_mappable`, etc.)
 
 ### Installation
@@ -29,7 +29,7 @@ Enable the plugin in your project's `analysis_options.yaml`:
 # analysis_options.yaml
 
 plugins:
-  build_runner_hook: ^2.0.0
+  build_runner_hook: ^2.0.2
 ```
 
 That's it. The next time your IDE restarts the analysis server, the plugin will start automatically when it encounters a `part` directive in your source files.

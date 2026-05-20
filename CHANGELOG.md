@@ -1,3 +1,11 @@
+## 2.0.2
+
+- Require Dart Sdk version `3.12.0`.
+
+## 2.0.1
+
+- CHANGELOG.md formatting changes.
+
 ## 2.0.0
 
 ### Added
